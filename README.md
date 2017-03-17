@@ -1,5 +1,6 @@
 # Gamewatcher
 Query information from various game servers. Watch their current state via web interface or REST api.
+[![Build Status](https://travis-ci.org/FreeSlave/gamewatcher.svg?branch=master)](https://travis-ci.org/FreeSlave/gamewatcher)
 
 ## Supported game servers
 
@@ -21,7 +22,7 @@ nano config.json # edit config
 dub build --build=release
 dub run
 xdg-open http://127.0.0.1:27080/servers # open web interface in browser
-curl http://127.0.0.1:27080/api/servers # get JSON formatted info via REST api
+curl http://127.0.0.1:27080/api/servers | python -m json.tool # get JSON formatted info via REST api
 ```
 
 ## Run in docker
