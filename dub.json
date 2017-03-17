@@ -1,0 +1,15 @@
+{
+	"authors": [
+		"Roman Chistokhodov"
+	],
+	"name": "gamewatcher",
+	"license": "BSL-1.0",
+	"copyright": "Copyright © 2016, Roman Chistokhodov",
+	"description": "Querying information from game servers.",
+	"dependencies": {
+		"vibe-d": "~>0.7.30"
+	},
+	"versions": [
+		"VibeDefaultMain"
+	]
+}

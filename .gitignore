@@ -22,3 +22,7 @@ docs/
 
 # Code coverage
 *.lst
+
+gamewatcher
+config.json
+!config_example/config.json

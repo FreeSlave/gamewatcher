@@ -1,0 +1,34 @@
+- void css(string file)
+    link(rel= 'stylesheet', type='text/css', href='styles/#{file}.css')
+
+doctype html
+html
+    head
+        title Hazard Team's Half-Life Servers
+        - css("styles");
+    body
+        div.serverList
+            - foreach(server; servers)
+                div.server
+                    div.serverMainInfo
+                        span
+                            img.gameIcon(title='#{server.gameName}', src='#{server.iconPath}')
+                            div.serverTitle #{server.serverName}
+                                - if (server.isOk)
+                                    img(title='All is OK', src='images/dialog-ok-apply.png')
+                                - else
+                                    img(title='Broken', src='images/dialog-error.png')
+                    div.serverAddress connect #{server.address}:#{server.port}
+                    div.serverAdditionalInfo
+                        div.mapName Current map: #{server.mapName}
+                        div.playerCount Players: #{server.playersCount}/#{server.maxPlayersCount}
+                    div.playerTable
+                        div.headerRow
+                            div.headerNameCell Name
+                            div.headerScoreCell Score
+                        - foreach(player; server.players)
+                            div.playerRow
+                                div.playerCell #{player.name}
+                                div.playerCell #{player.score}
+                    
+        

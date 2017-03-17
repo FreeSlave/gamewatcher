@@ -1,0 +1,82 @@
+img.gameIcon {
+    width: 24px;
+    height: 24px;
+}
+
+div.serverList {
+    width:500px;
+}
+
+div.server {
+    margin-bottom:20px;
+}
+
+div.serverMainInfo {
+    display : table;
+    width: 100%;
+}
+
+div.serverTitle {
+    text-align: left;
+    display: table-cell;
+    font-size: 120%;
+}
+
+div.serverAddress {
+    display: table-cell;
+    font-size: 130%;
+}
+
+div.serverAdditionalInfo {
+    display: table;
+    width: 100%;
+}
+
+div.mapName {
+    text-align: left;
+    display: table-cell;
+    font-size: 120%;
+    width: 60%;
+}
+
+div.playerCount {
+    text-align: left;
+    display: table-cell;
+    font-size: 120%;
+}
+
+div.playerTable {
+    display: table;
+    border: 1px solid black;
+    width: 100%;
+}
+
+div.headerRow {
+    display: table-row;
+}
+
+div.headerNameCell {
+    font-weight: bold;
+    display: table-cell;
+    border: 1px solid black;
+    padding: 4px;
+    width: 80%;
+}
+
+div.headerScoreCell {
+    font-weight: bold;
+    display: table-cell;
+    border: 1px solid black;
+    padding: 4px;
+}
+
+div.playerRow {
+    display: table-row;
+}
+
+div.playerCell {
+    display: table-cell;
+    border: 1px solid black;
+    padding: 4px;
+}
+

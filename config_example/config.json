@@ -1,0 +1,28 @@
+{
+    "refresh_time" : 5000,
+    "recv_timeout" : 20000,
+    "servers" :
+    [
+        {
+            "name" : "hl",
+            "address" : "127.0.0.1",
+            "port" : 27015,
+            "type" : "valve",
+            "icon" : "half_life_classic"
+        },
+        {
+            "name" : "hl2dm",
+            "address" : "127.0.0.1",
+            "port" : 27022,
+            "type" : "valve",
+            "icon" : "half_life_2"
+        },
+        {
+            "name" : "xash",
+            "address" : "127.0.0.1",
+            "port" : 28015,
+            "type" : "xash",
+            "icon" : "half_life_classic"
+        }
+    ]
+}
