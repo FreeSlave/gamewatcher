@@ -1,0 +1,7 @@
+language: d
+matrix:
+    include:
+        - d: dmd-2.073.2
+  
+script:
+    - dub build --compiler=${DC}
