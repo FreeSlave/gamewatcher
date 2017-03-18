@@ -193,6 +193,7 @@ shared static this()
         string mapName;
         string gameName;
         string iconPath;
+        string steamUrl;
         ubyte playersCount;
         ubyte maxPlayersCount;
         bool isOk;
@@ -210,6 +211,10 @@ shared static this()
             server.isOk = redisDb.get!bool(format("%s:ok", watcher.name));
             auto serverInfoString = redisDb.get!string(format("%s:serverinfo", watcher.name));
             auto playersString = redisDb.get!string(format("%s:players", watcher.name));
+            
+            if (watcher.supportsSteamUrl()) {
+                server.steamUrl = format("steam://connect/%s:%s", server.address, server.port);
+            }
             
             if (serverInfoString !is null && playersString !is null) {
                 auto serverInfoJson = serverInfoString.parseJsonString();

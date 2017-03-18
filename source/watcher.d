@@ -36,6 +36,10 @@ class Watcher
     abstract void requestServerInfo();
     abstract void handleResponse(Duration timeout);
     
+    bool supportsSteamUrl() const {
+        return false;
+    }
+    
     void delegate(Watcher watcher, const ServerInfo serverInfo) onServerInfoReceived;
     void delegate(Watcher watcher, const Player[] players) onPlayersReceived;
     void delegate(Watcher wathcer, Exception e) onConnectionError;
@@ -141,6 +145,10 @@ final class ValveWatcher : Watcher
         } else {
             logWarn("%s: invalid response header: %s", name, header);
         }
+    }
+    
+    override bool supportsSteamUrl() const {
+        return true;
     }
     
 private:
@@ -275,12 +283,16 @@ private:
     {
         Player[] players;
         try {
-            auto playerChunks = packStr.chomp().split('\\').dropBack(1).chunks(4);
+            auto splitted = packStr.chomp().split('\\');
+            if (splitted.length && splitted.back.length == 0) {
+                splitted.popBack();
+            }
+            auto playerChunks = splitted.chunks(4);
             foreach(playerChunk; playerChunks) {
                 try {
                     Player player;
                     
-                    enforce(!playerChunk.empty);
+                    enforce(!playerChunk.empty, "empty index");
                     if (playerChunk.front.length == 1 && playerChunk.front[0] < '0') {
                         // support versions before this fix https://github.com/FWGS/xash3d/commit/83868b1cad7df74998ebf2d958de222731241627
                         player.index = cast(ubyte)playerChunk.front[0];
@@ -289,21 +301,21 @@ private:
                     }
                     playerChunk.popFront();
                     
-                    enforce(!playerChunk.empty);
+                    enforce(!playerChunk.empty, "empty name");
                     player.name = playerChunk.front;
                     playerChunk.popFront();
                     
-                    enforce(!playerChunk.empty);
+                    enforce(!playerChunk.empty, "empty score");
                     player.score = playerChunk.front.to!int;
                     playerChunk.popFront();
                     
-                    enforce(!playerChunk.empty);
+                    enforce(!playerChunk.empty, "empty duration");
                     player.duration = playerChunk.front.to!float;
                     playerChunk.popFront();
                     
                     players ~= player;
                 } catch(Exception e) {
-                    logError("%s: player parse error: %s", name, e.msg);
+                    logError("%s: player parse error: %s. playerChunk: %s", name, e.msg, playerChunk);
                 }
             }
         } catch(Exception e) {

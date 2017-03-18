@@ -18,17 +18,29 @@ html
                                     img(title='All is OK', src='images/dialog-ok-apply.png')
                                 - else
                                     img(title='Broken', src='images/dialog-error.png')
-                    div.serverAddress connect #{server.address}:#{server.port}
+                    div.serverAddress 
+                        - if (server.steamUrl.length)
+                            | connect
+                            a(href='#{server.steamUrl}') #{server.address}:#{server.port}
+                        - else
+                            | connect #{server.address}:#{server.port}
                     div.serverAdditionalInfo
                         div.mapName Current map: #{server.mapName}
                         div.playerCount Players: #{server.playersCount}/#{server.maxPlayersCount}
-                    div.playerTable
-                        div.headerRow
-                            div.headerNameCell Name
-                            div.headerScoreCell Score
-                        - foreach(player; server.players)
-                            div.playerRow
-                                div.playerCell #{player.name}
-                                div.playerCell #{player.score}
+                    - if (server.players.length)
+                        div.playerTable
+                            div.headerRow
+                                div.headerNameCell Name
+                                div.headerScoreCell Score
+                            - foreach(player; server.players)
+                                div.playerRow
+                                    div.playerCell #{player.name}
+                                    div.playerCell #{player.score}
+                    - else
+                        p Server is empty :(
+                            
+        h2 Opening steam:// urls on Linux
+        p Open ~/.local/share/applications/mimeapps.list and add
+        blockquote x-scheme-handler/steam=steam.desktop
                     
         
