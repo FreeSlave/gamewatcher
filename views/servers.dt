@@ -4,7 +4,7 @@
 doctype html
 html
     head
-        title Hazard Team's Half-Life Servers
+        title #{pageTitle}
         - css("styles");
     body
         div.serverList
@@ -39,8 +39,8 @@ html
                     - else
                         p Server is empty :(
                             
-        h2 Opening steam:// urls on Linux
-        p Open ~/.local/share/applications/mimeapps.list and add
+        h2 Enable opening steam:// urls on Linux
+        p Add to the end of ~/.local/share/applications/mimeapps.list file
         blockquote x-scheme-handler/steam=steam.desktop
                     
         

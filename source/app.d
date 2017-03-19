@@ -46,6 +46,7 @@ struct ServerConfig
 struct Config
 {
     ServerConfig[] servers;
+    string page_title;
     uint refresh_time;
     uint recv_timeout;
 }
@@ -235,7 +236,8 @@ shared static this()
             }
         }
         
-        res.render!("servers.dt", servers);
+        string pageTitle = config.page_title.length ? config.page_title : "Game servers";
+        res.render!("servers.dt", servers, pageTitle);
     });
     
     router.get("*", serveStaticFiles("./public/"));

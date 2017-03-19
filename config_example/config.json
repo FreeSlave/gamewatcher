@@ -1,4 +1,5 @@
 {
+    "page_title" : "Game servers",
     "refresh_time" : 5000,
     "recv_timeout" : 20000,
     "servers" :
