@@ -128,8 +128,12 @@ shared static this()
             case "quake":
                 watcher = new QuakeWatcher(name, address, port);
                 break;
+            case "quake2":
+                watcher = new Quake2Watcher(name, address, port);
+                break;
             default:
                 logError("Unknown server type %s", serverConfig.type);
+                break;
         }
         
         watcher.onServerInfoReceived = onServerInfoReceived;

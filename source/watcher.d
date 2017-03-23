@@ -6,6 +6,7 @@
  * License: 
  *  $(LINK2 http://www.boost.org/LICENSE_1_0.txt, Boost License 1.0).
  */
+module watcher;
 import vibe.core.log;
 import vibe.core.net;
 
@@ -347,6 +348,7 @@ final class QuakeWatcher : Watcher
                     }
                     ServerInfo serverInfo;
                     serverInfo.game = "Quake";
+                    serverInfo.gamedir = "baseq";
                     serverInfo.serverTypeC = ' ';
                     serverInfo.environmentC = ' ';
                     
@@ -403,6 +405,99 @@ final class QuakeWatcher : Watcher
                 }
             } else {
                 logWarn("%s: unknown payload header: %s", name, payloadHeader);
+            }
+        } else {
+            logWarn("%s: invalid response header: %s", name, header);
+        }
+    }
+}
+
+final class Quake2Watcher : Watcher
+{
+    this(string name, string host, ushort port) {
+        super(name, host, port);
+    }
+    
+    protected override void requestInfoImpl() {
+        immutable infoRequest = "\xff\xff\xff\xffstatus\0".representation;
+        send(infoRequest);
+    }
+    
+    protected override void handleResponseImpl(const(ubyte)[] pack)
+    {   
+        if (pack.length && pack[$-1] == '\0') {
+            pack = pack[0..$-1];
+        }
+        auto header = read!(int, Endian.littleEndian)(pack);
+        if (header == -1) {
+            auto lines = pack.split('\n').map!(line => cast(string)line);
+            if (!lines.empty && lines.front == "print") {
+                lines.popFront();
+            } else {
+                return;
+            }
+            
+            if (!lines.empty) {
+                auto kvList = lines.front.splitter('\\').map!(s => cast(string)s);
+                if (!kvList.empty && kvList.front.empty) {
+                    kvList.popFront();
+                }
+                ServerInfo serverInfo;
+                serverInfo.game = "Quake II";
+                serverInfo.gamedir = "baseq2";
+                serverInfo.serverTypeC = ' ';
+                serverInfo.environmentC = ' ';
+                
+                while(!kvList.empty) {
+                    auto key = kvList.front;
+                    kvList.popFront();
+                    if (!kvList.empty) {
+                        auto value = kvList.front;
+                        kvList.popFront();
+                        
+                        switch(key)
+                        {
+                            case "maxclients":
+                                serverInfo.maxPlayersCount = value.to!ubyte;
+                                break;
+                            case "mapname":
+                                serverInfo.mapName = value;
+                                break;
+                            case "hostname":
+                                serverInfo.serverName = value;
+                                break;
+                            case "gamename":
+                                serverInfo.gamedir = value;
+                                break;
+                            default:
+                                break;
+                        }
+                    }
+                }
+                lines.popFront();
+                
+                Player[] players;
+                ubyte i = 0;
+                foreach(line; lines) {
+                    if (line.empty) {
+                        continue;
+                    }
+                    Player player;
+                    player.index = i++;
+                    player.duration = 0;
+                    uint ping;
+                    try {
+                        auto byUnit = line.byCodeUnit;
+                        formattedRead(byUnit, "%s %s \"%s\"", &player.score, &ping, &player.name);
+                        players ~= player;
+                    } catch(Exception e) {
+                        logError("%s: player parse error: %s. line : %s", line);
+                    }
+                }
+                
+                serverInfo.playersCount = cast(ubyte)players.length;
+                callOnServerInfoReceived(serverInfo);
+                callOnPlayersReceived(players);
             }
         } else {
             logWarn("%s: invalid response header: %s", name, header);

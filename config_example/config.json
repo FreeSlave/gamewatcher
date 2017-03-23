@@ -32,5 +32,12 @@
             "type" : "quake",
             "icon" : "quake"
         },
+        {
+            "name" : "quake2",
+            "address" : "127.0.0.1",
+            "port" : 27910,
+            "type" : "quake2",
+            "icon" : "quake"
+        }
     ]
 }

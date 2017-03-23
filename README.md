@@ -7,6 +7,8 @@ Query information from various game servers. Watch their current state via web i
 
 * Games by Valve, both GoldSource and Source based
 * Xash3D servers by [FWGS](https://github.com/FWGS)
+* Quake
+* Quake II
 
 ## Dependencies
 
