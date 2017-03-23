@@ -13,7 +13,6 @@ import vibe.core.core;
 import vibe.core.file;
 import vibe.core.log;
 import vibe.core.net;
-import vibe.core.args;
 import vibe.http.router;
 import vibe.http.server;
 import vibe.http.fileserver;
@@ -53,6 +52,12 @@ struct Config
 
 shared static this()
 {
+    version(linux) {
+        import etc.linux.memoryerror;
+        static if (is(typeof(registerMemoryErrorHandler)))
+            registerMemoryErrorHandler();
+    }
+    
     Watcher[] watchers;
     
     string bindAddress = "0.0.0.0";
@@ -112,13 +117,19 @@ shared static this()
         auto port = serverConfig.port;
         
         Watcher watcher;
-        if (serverConfig.type == "valve") {
-            watcher = new ValveWatcher(name, address, port);
-        } else if (serverConfig.type == "xash") {
-            watcher = new XashWatcher(name, address, port);
-        } else {
-            logError("Unknown server type %s", serverConfig.type);
-            continue;
+        
+        switch(serverConfig.type) {
+            case "valve":
+                watcher = new ValveWatcher(name, address, port);
+                break;
+            case "xash":
+                watcher = new XashWatcher(name, address, port);
+                break;
+            case "quake":
+                watcher = new QuakeWatcher(name, address, port);
+                break;
+            default:
+                logError("Unknown server type %s", serverConfig.type);
         }
         
         watcher.onServerInfoReceived = onServerInfoReceived;
@@ -137,14 +148,9 @@ shared static this()
     }
 
     runTask(delegate (Watcher[] watchers) {
-        foreach(watcher; watchers) {
-            watcher.requestPlayers();
-        }
-        sleep(dur!"msecs"(1000));
         while(true) {
             foreach(watcher; watchers) {
-                watcher.requestServerInfo();
-                watcher.requestPlayers();
+                watcher.requestInfo();
             }
             sleep(dur!"msecs"(config.refresh_time));
         }
@@ -171,9 +177,15 @@ shared static this()
                 Json j = Json.emptyObject;
                 auto serverInfo = redisDb.get!string(format("%s:serverinfo", watcher.name));
                 auto players = redisDb.get!string(format("%s:players", watcher.name));
-                if (serverInfo !is null && players !is null) {
+                
+                if (serverInfo !is null) {
+                    if (players !is null) {
+                        j["players"] = players.parseJsonString();
+                    } else {
+                        j["player"] = Json.emptyArray;
+                    }
+                    
                     j["serverInfo"] = serverInfo.parseJsonString();
-                    j["players"] = players.parseJsonString();
                     j["host"] = redisDb.get!string(format("%s:address", watcher.name));
                     j["port"] = redisDb.get!string(format("%s:port", watcher.name)).to!ushort;
                     j["ok"] = redisDb.get!bool(format("%s:ok", watcher.name));

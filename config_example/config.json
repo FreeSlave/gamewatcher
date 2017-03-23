@@ -24,6 +24,13 @@
             "port" : 28015,
             "type" : "xash",
             "icon" : "half_life_classic"
-        }
+        },
+        {
+            "name" : "quake",
+            "address" : "127.0.0.1",
+            "port" : 27500,
+            "type" : "quake",
+            "icon" : "quake"
+        },
     ]
 }

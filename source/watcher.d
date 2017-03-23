@@ -10,12 +10,14 @@ import vibe.core.log;
 import vibe.core.net;
 
 import core.time;
+import std.algorithm;
 import std.bitmanip;
 import std.conv;
 import std.format;
 import std.exception;
 import std.range;
 import std.string;
+import std.utf;
 
 import player;
 import serverinfo;
@@ -32,9 +34,25 @@ class Watcher
         socket.connect(host, port);
     }
     
-    abstract void requestPlayers();
-    abstract void requestServerInfo();
-    abstract void handleResponse(Duration timeout);
+    final void requestInfo() {
+        try {
+            requestInfoImpl();
+        } catch(Exception e) {
+            setNotOk(e);
+        }
+    }
+    
+    final void handleResponse(Duration timeout) {
+        try {
+            auto data = receive(timeout);
+            handleResponseImpl(data);
+            setOk();
+        } catch(Exception e) {
+            setNotOk(e);
+        }
+    }
+    protected abstract void handleResponseImpl(const(ubyte)[] pack);
+    protected abstract void requestInfoImpl();
     
     bool supportsSteamUrl() const {
         return false;
@@ -77,14 +95,12 @@ protected:
     }
     
     final void callOnServerInfoReceived(const ServerInfo serverInfo) {
-        setOk();
         if (onServerInfoReceived) {
             onServerInfoReceived(this, serverInfo);
         }
     }
     
     final void callOnPlayersReceived(const Player[] players) {
-        setOk();
         if (onPlayersReceived) {
             onPlayersReceived(this, players);
         }
@@ -100,27 +116,15 @@ final class ValveWatcher : Watcher
         challenge = -1;
     }
     
-    override void requestPlayers()
-    {
+    protected override void requestInfoImpl() {
         immutable playersRequest = "\xff\xff\xff\xffU".representation ~ nativeToLittleEndian!int(challenge)[].assumeUnique;
         send(playersRequest);
-    }
-    
-    override void requestServerInfo()
-    {
         immutable infoRequest = "\xff\xff\xff\xffTSource Engine Query\0".representation;
         send(infoRequest);
     }
     
-    override void handleResponse(Duration timeout)
+    protected override void handleResponseImpl(const(ubyte)[] pack)
     {
-        const(ubyte)[] pack; 
-        try {
-            pack = receive(timeout);
-        } catch(Exception e) {
-            setNotOk(e);
-            return;
-        }
         auto header = read!(int, Endian.littleEndian)(pack);
         if (header == -1) {
             ubyte payloadHeader = read!ubyte(pack);
@@ -175,13 +179,14 @@ private:
     final Player[] parsePlayers(const(ubyte)[] data) {
         ubyte playerCount = read!ubyte(data);
         Player[] players;
+        players.length = playerCount;
         for (int i=0; i<playerCount; ++i) {
             Player player;
             player.index = read!ubyte(data);
             player.name = readStringZ(data);
             player.score = read!(int, Endian.littleEndian)(data);
             player.duration = read!(float, Endian.littleEndian)(data);
-            players ~= player;
+            players[i] = player;
         }
         return players;
     }
@@ -195,28 +200,19 @@ final class XashWatcher : Watcher
         super(name, host, port);
     }
     
-    override void requestPlayers()
-    {
+    protected override void requestInfoImpl() {
         immutable playersRequest = "\xff\xff\xff\xffnetinfo 48 0 3\0".representation;
-        socket.send(playersRequest);
-    }
-    
-    override void requestServerInfo()
-    {
-        immutable infoRequest = "\xff\xff\xff\xffnetinfo 48 0 4\0".representation;
-        socket.send(infoRequest);
-    }
-    
-    override void handleResponse(Duration timeout)
-    {
-        const(ubyte)[] pack; 
-        try {
-            pack = receive(timeout);
-        } catch(Exception e) {
-            setNotOk(e);
-            return;
-        }
+        send(playersRequest);
         
+        immutable infoRequest = "\xff\xff\xff\xffnetinfo 48 0 4\0".representation;
+        send(infoRequest);
+    }
+    
+    override void handleResponseImpl(const(ubyte)[] pack)
+    {
+        if (pack.length && pack[$-1] == '\0') {
+            pack = pack[0..$-1];
+        }
         auto header = read!(int, Endian.littleEndian)(pack);
         if (header == -1) {
             string command;
@@ -283,17 +279,14 @@ private:
     {
         Player[] players;
         try {
-            auto splitted = packStr.chomp().split('\\');
-            if (splitted.length && splitted.back.length == 0) {
-                splitted.popBack();
-            }
+            auto splitted = packStr.chomp().splitter('\\').filter!(s => !s.empty).array;
             auto playerChunks = splitted.chunks(4);
             foreach(playerChunk; playerChunks) {
                 try {
                     Player player;
                     
                     enforce(!playerChunk.empty, "empty index");
-                    if (playerChunk.front.length == 1 && playerChunk.front[0] < '0') {
+                    if (playerChunk.front.length == 1 && playerChunk.front[0] < 32) {
                         // support versions before this fix https://github.com/FWGS/xash3d/commit/83868b1cad7df74998ebf2d958de222731241627
                         player.index = cast(ubyte)playerChunk.front[0];
                     } else {
@@ -323,5 +316,96 @@ private:
         }
         
         return players;
+    }
+}
+
+final class QuakeWatcher : Watcher
+{
+    this(string name, string host, ushort port) {
+        super(name, host, port);
+    }
+    
+    protected override void requestInfoImpl() {
+        immutable infoRequest = "\xff\xff\xff\xffstatus\0".representation;
+        send(infoRequest);
+    }
+    
+    protected override void handleResponseImpl(const(ubyte)[] pack)
+    {   
+        if (pack.length && pack[$-1] == '\0') {
+            pack = pack[0..$-1];
+        }
+        auto header = read!(int, Endian.littleEndian)(pack);
+        if (header == -1) {
+            auto payloadHeader = read!(ubyte)(pack);
+            if (payloadHeader == 'n') {
+                auto lines = pack.split('\n').map!(line => cast(string)line);
+                if (!lines.empty) {
+                    auto kvList = lines.front.splitter('\\').map!(s => cast(string)s);
+                    if (!kvList.empty && kvList.front.empty) {
+                        kvList.popFront();
+                    }
+                    ServerInfo serverInfo;
+                    serverInfo.game = "Quake";
+                    serverInfo.serverTypeC = ' ';
+                    serverInfo.environmentC = ' ';
+                    
+                    while(!kvList.empty) {
+                        auto key = kvList.front;
+                        kvList.popFront();
+                        if (!kvList.empty) {
+                            auto value = kvList.front;
+                            kvList.popFront();
+                            
+                            switch(key)
+                            {
+                                case "maxclients":
+                                    serverInfo.maxPlayersCount = value.to!ubyte;
+                                    break;
+                                case "map":
+                                    serverInfo.mapName = value;
+                                    break;
+                                case "hostname":
+                                    serverInfo.serverName = value;
+                                    break;
+                                case "*gamedir":
+                                    serverInfo.gamedir = value;
+                                    break;
+                                default:
+                                    break;
+                            }
+                        }
+                    }
+                    lines.popFront();
+                    
+                    Player[] players;
+                    foreach(line; lines) {
+                        if (line.empty) {
+                            continue;
+                        }
+                        Player player;
+                        uint ping;
+                        string skin;
+                        uint color1, color2;
+                        try {
+                            auto byUnit = line.byCodeUnit;
+                            formattedRead(byUnit, "%s %s %s %s \"%s\" \"%s\" %s %s", 
+                                &player.index, &player.score, &player.duration, &ping, &player.name, &skin, &color1, &color2);
+                            players ~= player;
+                        } catch(Exception e) {
+                            logError("%s: player parse error: %s. line : %s", line);
+                        }
+                    }
+                    
+                    serverInfo.playersCount = cast(ubyte)players.length;
+                    callOnServerInfoReceived(serverInfo);
+                    callOnPlayersReceived(players);
+                }
+            } else {
+                logWarn("%s: unknown payload header: %s", name, payloadHeader);
+            }
+        } else {
+            logWarn("%s: invalid response header: %s", name, header);
+        }
     }
 }
