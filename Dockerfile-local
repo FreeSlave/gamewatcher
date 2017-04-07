@@ -6,4 +6,4 @@ COPY ./gamewatcher .
 COPY ./config.json .
 COPY ./public ./public
 EXPOSE 27080
-CMD service redis-server start && ./gamewatcher
+CMD service redis-server start && exec ./gamewatcher

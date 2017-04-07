@@ -17,4 +17,4 @@ COPY ./source ./source
 COPY ./views ./views
 RUN dub build
 EXPOSE 27080
-CMD service redis-server start && ./gamewatcher
+CMD service redis-server start && exec ./gamewatcher
