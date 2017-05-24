@@ -218,10 +218,15 @@ final class XashWatcher : Watcher
         if (header == -1) {
             string command;
             string packStr = cast(string)pack;
-            formattedRead(packStr, "%s ", &command);
+            if (!formattedRead(packStr, "%s ", &command)) {
+                logWarn("%s: Could not match command from input: %s", name, packStr);
+                return;
+            }
             if (command == "netinfo") {
                 int context, type;
-                formattedRead(packStr, " %s %s", &context, &type);
+                if (formattedRead(packStr, " %s %s", &context, &type) != 2) {
+                    logWarn("%s: Could not match context and type from input: %s", name, packStr);
+                }
                 packStr = packStr.stripLeft;
                 if (type == 3) {
                     callOnPlayersReceived(parsePlayers(packStr));

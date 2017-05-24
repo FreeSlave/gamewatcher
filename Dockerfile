@@ -16,5 +16,8 @@ COPY ./public ./public
 COPY ./source ./source
 COPY ./views ./views
 RUN dub build
+RUN useradd gamewatcher
+RUN mkdir -p /etc/vibe/
+RUN echo '{"user": "gamewatcher","group": "gamewatcher"}"' > /etc/vibe/vibe.conf
 EXPOSE 27080
 CMD service redis-server start && exec ./gamewatcher

@@ -5,5 +5,8 @@ WORKDIR /opt/gamewatcher
 COPY ./gamewatcher .
 COPY ./config.json .
 COPY ./public ./public
+RUN useradd gamewatcher
+RUN mkdir -p /etc/vibe/
+RUN echo '{"user": "gamewatcher","group": "gamewatcher"}"' > /etc/vibe/vibe.conf
 EXPOSE 27080
 CMD service redis-server start && exec ./gamewatcher
