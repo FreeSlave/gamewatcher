@@ -22,8 +22,7 @@ Query information from various game servers. Watch their current state via web i
 ```
 cp config_example/config.json . # copy example config
 nano config.json # edit config
-dub build --build=release
-dub run
+dub run --build=release
 xdg-open http://127.0.0.1:27080/servers # open web interface in browser
 curl http://127.0.0.1:27080/api/servers | python -m json.tool # get JSON formatted info via REST api
 ```
@@ -46,7 +45,7 @@ docker run -p 27080:27080 gamewatcher
 
 ### Build on host and run in docker container:
 
-You build the project on the host environment and it's copied to the container. 
+You build the project on the host environment and it's copied to the container.
 Faster than the former method, but requires D tools on the host and produced binary file to be compatible with container environment.
 
 ```

@@ -239,7 +239,7 @@ shared static this()
                 server.mapName = serverInfoJson["map"].to!string;
                 server.playersCount = serverInfoJson["playersCount"].to!ubyte;
                 server.maxPlayersCount = serverInfoJson["maxPlayersCount"].to!ubyte;
-                server.players = deserializeJson!(Player[])(playersString);
+                server.players = jsonToPlayers(playersString.parseJsonString());
                 server.gameName = serverInfoJson["game"].to!string;
                 string gamedir = serverInfoJson["gamedir"].to!string;
                 if (gamedir.length) {

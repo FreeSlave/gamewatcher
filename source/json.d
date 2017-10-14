@@ -60,5 +60,29 @@ Json serverInfoToJson(const ServerInfo info)
 
 Json playersToJson(const(Player[]) players)
 {
-    return serializeToJson(players);
+    Json arr = Json.emptyArray;
+    foreach(player; players) {
+        Json p = Json.emptyObject;
+        p["index"] = player.index;
+        p["name"] = player.name;
+        p["score"] = player.score;
+        p["duration"] = player.duration;
+        arr.appendArrayElement(p);
+    }
+    return arr;
+}
+
+Player[] jsonToPlayers(Json arr)
+{
+    Player[] players;
+    foreach(element; arr)
+    {
+        Player player;
+        player.index = element["index"].to!ubyte;
+        player.name = element["name"].to!string;
+        player.score = element["score"].to!int;
+        player.duration = element["duration"].to!float;
+        players ~= player;
+    }
+    return players;
 }
