@@ -232,7 +232,7 @@ shared static this()
             if (watcher.supportsSteamUrl()) {
                 server.steamUrl = format("steam://connect/%s:%s", server.address, server.port);
             }
-            
+
             if (serverInfoString !is null && playersString !is null) {
                 auto serverInfoJson = serverInfoString.parseJsonString();
                 server.serverName = serverInfoJson["serverName"].to!string;

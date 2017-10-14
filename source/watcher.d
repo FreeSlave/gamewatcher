@@ -396,8 +396,10 @@ final class QuakeWatcher : Watcher
                         uint color1, color2;
                         try {
                             auto byUnit = line.byCodeUnit;
+                            string name;
                             formattedRead(byUnit, "%s %s %s %s \"%s\" \"%s\" %s %s", 
-                                &player.index, &player.score, &player.duration, &ping, &player.name, &skin, &color1, &color2);
+                                &player.index, &player.score, &player.duration, &ping, &name, &skin, &color1, &color2);
+                            player.name = name;
                             players ~= player;
                         } catch(Exception e) {
                             logError("%s: player parse error: %s. line : %s", line);
@@ -493,7 +495,9 @@ final class Quake2Watcher : Watcher
                     uint ping;
                     try {
                         auto byUnit = line.byCodeUnit;
-                        formattedRead(byUnit, "%s %s \"%s\"", &player.score, &ping, &player.name);
+                        string name;
+                        formattedRead(byUnit, "%s %s \"%s\"", &player.score, &ping, &name);
+                        player.name = name;
                         players ~= player;
                     } catch(Exception e) {
                         logError("%s: player parse error: %s. line : %s", line);

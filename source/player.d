@@ -14,7 +14,27 @@ import std.bitmanip;
 struct Player
 {
     ubyte index;
-    string name;
+    @property string name() const {
+        return _name;
+    }
+    @property string name(string n) {
+        import std.utf;
+        import std.typecons;
+        try {
+            validate(n);
+            _name = n;
+        } catch(Exception e) {
+            dstring result;
+            size_t index = 0;
+            while(index != n.length) {
+                result ~= decode!(Yes.useReplacementDchar)(n, index);
+            }
+            _name = result.toUTF8;
+        }
+        return _name;
+    }
     int score;
     float duration;
+private:
+    string _name;
 }
