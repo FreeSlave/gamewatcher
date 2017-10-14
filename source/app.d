@@ -1,9 +1,9 @@
 /**
- * Authors: 
+ * Authors:
  *  $(LINK2 https://github.com/FreeSlave, Roman Chistokhodov)
  * Copyright:
  *  Roman Chistokhodov, 2017
- * License: 
+ * License:
  *  $(LINK2 http://www.boost.org/LICENSE_1_0.txt, Boost License 1.0).
  */
 
@@ -57,9 +57,9 @@ shared static this()
         static if (is(typeof(registerMemoryErrorHandler)))
             registerMemoryErrorHandler();
     }
-    
+
     Watcher[] watchers;
-    
+
     string bindAddress = "0.0.0.0";
     ushort httpPort = 27080;
     string redisHost = "127.0.0.1";
@@ -67,57 +67,57 @@ shared static this()
     string configFileName = "config.json";
     string logFile;
     long dbIndex = 0;
-    
+
     readOption("bindaddress", &bindAddress, "assign address to http server socket");
     readOption("port", &httpPort, "port to run server on");
     readOption("config", &configFileName, "path to configuration json file");
     readOption("logfile", &logFile, "path to log file");
     readOption("redishost", &redisHost, "redis server ip address");
     readOption("redisport", &redisPort, "redist server port");
-    
+
     if (logFile.length) {
         setLogFile(logFile);
     }
-    
+
     auto redis = new RedisClient(redisHost, redisPort);
     redis.getDatabase(dbIndex).deleteAll();
-    
+
     auto configString = readFile(configFileName).assumeUnique.assumeUTF;
     auto config = deserializeJson!Config(configString);
-    
+
     auto onServerInfoReceived = delegate(Watcher watcher, const ServerInfo serverInfo) {
         logTrace("%s: got server info %s", watcher.name, serverInfo);
-        
+
         auto redisDb = redis.getDatabase(dbIndex);
         redisDb.set(format("%s:serverinfo", watcher.name), serverInfoToJson(serverInfo).toString());
     };
-    
+
     auto onPlayersReceived = delegate(Watcher watcher, const Player[] players) {
         logTrace("%s: got players %s", watcher.name, players);
-        
+
         auto redisDb = redis.getDatabase(dbIndex);
         redisDb.set(format("%s:players", watcher.name), playersToJson(players).toString());
     };
-    
+
     auto onConnectionError = delegate(Watcher watcher, Exception e) {
         logError("%s: connection to server lost: %s", watcher.name, e.msg);
         auto redisDb = redis.getDatabase(dbIndex);
         redisDb.set(format("%s:ok", watcher.name), false);
     };
-    
+
     auto onConnectionRestored = delegate(Watcher watcher) {
         logInfo("%s: connection restored", watcher.name);
         auto redisDb = redis.getDatabase(dbIndex);
         redisDb.set(format("%s:ok", watcher.name), true);
     };
-    
+
     foreach(serverConfig; config.servers) {
         auto name = serverConfig.name;
         auto address = serverConfig.address;
         auto port = serverConfig.port;
-        
+
         Watcher watcher;
-        
+
         switch(serverConfig.type) {
             case "valve":
                 watcher = new ValveWatcher(name, address, port);
@@ -135,19 +135,19 @@ shared static this()
                 logError("Unknown server type %s", serverConfig.type);
                 break;
         }
-        
+
         watcher.onServerInfoReceived = onServerInfoReceived;
         watcher.onPlayersReceived = onPlayersReceived;
         watcher.onConnectionError = onConnectionError;
         watcher.onConnectionRestored = onConnectionRestored;
         watcher.icon = serverConfig.icon;
-        
+
         auto redisDb = redis.getDatabase(dbIndex);
         redisDb.set(format("%s:address", name), address);
         redisDb.set(format("%s:port", name), format("%u", port));
         redisDb.set(format("%s:icon", name), format("%s", watcher.icon));
         redisDb.set(format("%s:ok", name), true);
-        
+
         watchers ~= watcher;
     }
 
@@ -159,7 +159,7 @@ shared static this()
             sleep(dur!"msecs"(config.refresh_time));
         }
     }, watchers);
-    
+
     foreach(w; watchers) {
         runTask(delegate(Watcher watcher) {
             while(true) {
@@ -171,7 +171,7 @@ shared static this()
             }
         }, w);
     }
-    
+
     auto router = new URLRouter;
     router.get("/api/servers", delegate(HTTPServerRequest req, HTTPServerResponse res) {
         auto redisDb = redis.getDatabase(dbIndex);
@@ -181,14 +181,14 @@ shared static this()
                 Json j = Json.emptyObject;
                 auto serverInfo = redisDb.get!string(format("%s:serverinfo", watcher.name));
                 auto players = redisDb.get!string(format("%s:players", watcher.name));
-                
+
                 if (serverInfo !is null) {
                     if (players !is null) {
                         j["players"] = players.parseJsonString();
                     } else {
                         j["player"] = Json.emptyArray;
                     }
-                    
+
                     j["serverInfo"] = serverInfo.parseJsonString();
                     j["host"] = redisDb.get!string(format("%s:address", watcher.name));
                     j["port"] = redisDb.get!string(format("%s:port", watcher.name)).to!ushort;
@@ -201,7 +201,7 @@ shared static this()
         }
         res.writeJsonBody(toRespond);
     });
-    
+
     static struct Server
     {
         string address;
@@ -216,11 +216,11 @@ shared static this()
         bool isOk;
         Player[] players;
     }
-    
+
     router.get("/servers", delegate(HTTPServerRequest req, HTTPServerResponse res) {
         Server[] servers;
         auto redisDb = redis.getDatabase(dbIndex);
-        
+
         foreach(const watcher; watchers) {
             Server server;
             server.address = redisDb.get!string(format("%s:address", watcher.name));
@@ -228,7 +228,7 @@ shared static this()
             server.isOk = redisDb.get!bool(format("%s:ok", watcher.name));
             auto serverInfoString = redisDb.get!string(format("%s:serverinfo", watcher.name));
             auto playersString = redisDb.get!string(format("%s:players", watcher.name));
-            
+
             if (watcher.supportsSteamUrl()) {
                 server.steamUrl = format("steam://connect/%s:%s", server.address, server.port);
             }
@@ -251,13 +251,13 @@ shared static this()
                 servers ~= server;
             }
         }
-        
+
         string pageTitle = config.page_title.length ? config.page_title : "Game servers";
         res.render!("servers.dt", servers, pageTitle);
     });
-    
+
     router.get("*", serveStaticFiles("./public/"));
-    
+
     auto settings = new HTTPServerSettings;
     settings.bindAddresses = [bindAddress];
     settings.port = httpPort;

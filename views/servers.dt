@@ -18,7 +18,7 @@ html
                                     img(title='All is OK', src='images/dialog-ok-apply.png')
                                 - else
                                     img(title='Broken', src='images/dialog-error.png')
-                    div.serverAddress 
+                    div.serverAddress
                         - if (server.steamUrl.length)
                             | connect
                             a(href='#{server.steamUrl}') #{server.address}:#{server.port}
@@ -38,9 +38,8 @@ html
                                     div.playerCell #{player.score}
                     - else
                         p Server is empty :(
-                            
+
         h2 Enable opening steam:// urls on Linux
         p Add to the end of ~/.local/share/applications/mimeapps.list file
         blockquote x-scheme-handler/steam=steam.desktop
-                    
-        
+

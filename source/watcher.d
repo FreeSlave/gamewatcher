@@ -1,9 +1,9 @@
 /**
- * Authors: 
+ * Authors:
  *  $(LINK2 https://github.com/FreeSlave, Roman Chistokhodov)
  * Copyright:
  *  Roman Chistokhodov, 2017
- * License: 
+ * License:
  *  $(LINK2 http://www.boost.org/LICENSE_1_0.txt, Boost License 1.0).
  */
 module watcher;
@@ -34,7 +34,7 @@ class Watcher
         socket = listenUDP(0);
         socket.connect(host, port);
     }
-    
+
     final void requestInfo() {
         try {
             requestInfoImpl();
@@ -42,7 +42,7 @@ class Watcher
             setNotOk(e);
         }
     }
-    
+
     final void handleResponse(Duration timeout) {
         try {
             auto data = receive(timeout);
@@ -54,24 +54,24 @@ class Watcher
     }
     protected abstract void handleResponseImpl(const(ubyte)[] pack);
     protected abstract void requestInfoImpl();
-    
+
     bool supportsSteamUrl() const {
         return false;
     }
-    
+
     void delegate(Watcher watcher, const ServerInfo serverInfo) onServerInfoReceived;
     void delegate(Watcher watcher, const Player[] players) onPlayersReceived;
     void delegate(Watcher wathcer, Exception e) onConnectionError;
     void delegate(Watcher wathcer) onConnectionRestored;
-    
+
     string name;
     string icon;
     string host;
     ushort port;
-    
+
 protected:
     bool isOk;
-    
+
     final void send(const(ubyte)[] toSend) {
         socket.send(toSend);
     }
@@ -94,13 +94,13 @@ protected:
             }
         }
     }
-    
+
     final void callOnServerInfoReceived(const ServerInfo serverInfo) {
         if (onServerInfoReceived) {
             onServerInfoReceived(this, serverInfo);
         }
     }
-    
+
     final void callOnPlayersReceived(const Player[] players) {
         if (onPlayersReceived) {
             onPlayersReceived(this, players);
@@ -116,14 +116,14 @@ final class ValveWatcher : Watcher
         super(name, host, port);
         challenge = -1;
     }
-    
+
     protected override void requestInfoImpl() {
         immutable playersRequest = "\xff\xff\xff\xffU".representation ~ nativeToLittleEndian!int(challenge)[].assumeUnique;
         send(playersRequest);
         immutable infoRequest = "\xff\xff\xff\xffTSource Engine Query\0".representation;
         send(infoRequest);
     }
-    
+
     protected override void handleResponseImpl(const(ubyte)[] pack)
     {
         auto header = read!(int, Endian.littleEndian)(pack);
@@ -151,11 +151,11 @@ final class ValveWatcher : Watcher
             logWarn("%s: invalid response header: %s", name, header);
         }
     }
-    
+
     override bool supportsSteamUrl() const {
         return true;
     }
-    
+
 private:
     final ServerInfo parseServerInfo(const(ubyte)[] data)
     {
@@ -165,7 +165,7 @@ private:
         info.mapName = readStringZ(data);
         info.gamedir = readStringZ(data);
         info.game = readStringZ(data);
-        
+
         info.steamAppId = read!(short, Endian.littleEndian)(data);
         info.playersCount = readByte(data);
         info.maxPlayersCount = readByte(data);
@@ -176,7 +176,7 @@ private:
         info.VAC = readByte(data);
         return info;
     }
-    
+
     final Player[] parsePlayers(const(ubyte)[] data) {
         ubyte playerCount = read!ubyte(data);
         Player[] players;
@@ -191,7 +191,7 @@ private:
         }
         return players;
     }
-    
+
     int challenge;
 }
 
@@ -200,15 +200,15 @@ final class XashWatcher : Watcher
     this(string name, string host, ushort port) {
         super(name, host, port);
     }
-    
+
     protected override void requestInfoImpl() {
         immutable playersRequest = "\xff\xff\xff\xffnetinfo 48 0 3\0".representation;
         send(playersRequest);
-        
+
         immutable infoRequest = "\xff\xff\xff\xffnetinfo 48 0 4\0".representation;
         send(infoRequest);
     }
-    
+
     override void handleResponseImpl(const(ubyte)[] pack)
     {
         if (pack.length && pack[$-1] == '\0') {
@@ -240,7 +240,7 @@ final class XashWatcher : Watcher
             logWarn("%s: invalid response header: %s", name, header);
         }
     }
-    
+
 private:
     final ServerInfo parseServerInfo(string packStr)
     {
@@ -290,7 +290,7 @@ private:
             foreach(playerChunk; playerChunks) {
                 try {
                     Player player;
-                    
+
                     enforce(!playerChunk.empty, "empty index");
                     if (playerChunk.front.length == 1 && playerChunk.front[0] < 32) {
                         // support versions before this fix https://github.com/FWGS/xash3d/commit/83868b1cad7df74998ebf2d958de222731241627
@@ -299,19 +299,19 @@ private:
                         player.index = playerChunk.front.to!ubyte;
                     }
                     playerChunk.popFront();
-                    
+
                     enforce(!playerChunk.empty, "empty name");
                     player.name = playerChunk.front;
                     playerChunk.popFront();
-                    
+
                     enforce(!playerChunk.empty, "empty score");
                     player.score = playerChunk.front.to!int;
                     playerChunk.popFront();
-                    
+
                     enforce(!playerChunk.empty, "empty duration");
                     player.duration = playerChunk.front.to!float;
                     playerChunk.popFront();
-                    
+
                     players ~= player;
                 } catch(Exception e) {
                     logError("%s: player parse error: %s. playerChunk: %s", name, e.msg, playerChunk);
@@ -320,7 +320,7 @@ private:
         } catch(Exception e) {
             logError("%s: players parse error: %s", name, e.msg);
         }
-        
+
         return players;
     }
 }
@@ -330,14 +330,14 @@ final class QuakeWatcher : Watcher
     this(string name, string host, ushort port) {
         super(name, host, port);
     }
-    
+
     protected override void requestInfoImpl() {
         immutable infoRequest = "\xff\xff\xff\xffstatus\0".representation;
         send(infoRequest);
     }
-    
+
     protected override void handleResponseImpl(const(ubyte)[] pack)
-    {   
+    {
         if (pack.length && pack[$-1] == '\0') {
             pack = pack[0..$-1];
         }
@@ -356,14 +356,14 @@ final class QuakeWatcher : Watcher
                     serverInfo.gamedir = "baseq";
                     serverInfo.serverTypeC = ' ';
                     serverInfo.environmentC = ' ';
-                    
+
                     while(!kvList.empty) {
                         auto key = kvList.front;
                         kvList.popFront();
                         if (!kvList.empty) {
                             auto value = kvList.front;
                             kvList.popFront();
-                            
+
                             switch(key)
                             {
                                 case "maxclients":
@@ -384,7 +384,7 @@ final class QuakeWatcher : Watcher
                         }
                     }
                     lines.popFront();
-                    
+
                     Player[] players;
                     foreach(line; lines) {
                         if (line.empty) {
@@ -397,7 +397,7 @@ final class QuakeWatcher : Watcher
                         try {
                             auto byUnit = line.byCodeUnit;
                             string name;
-                            formattedRead(byUnit, "%s %s %s %s \"%s\" \"%s\" %s %s", 
+                            formattedRead(byUnit, "%s %s %s %s \"%s\" \"%s\" %s %s",
                                 &player.index, &player.score, &player.duration, &ping, &name, &skin, &color1, &color2);
                             player.name = name;
                             players ~= player;
@@ -405,7 +405,7 @@ final class QuakeWatcher : Watcher
                             logError("%s: player parse error: %s. line : %s", line);
                         }
                     }
-                    
+
                     serverInfo.playersCount = cast(ubyte)players.length;
                     callOnServerInfoReceived(serverInfo);
                     callOnPlayersReceived(players);
@@ -424,14 +424,14 @@ final class Quake2Watcher : Watcher
     this(string name, string host, ushort port) {
         super(name, host, port);
     }
-    
+
     protected override void requestInfoImpl() {
         immutable infoRequest = "\xff\xff\xff\xffstatus\0".representation;
         send(infoRequest);
     }
-    
+
     protected override void handleResponseImpl(const(ubyte)[] pack)
-    {   
+    {
         if (pack.length && pack[$-1] == '\0') {
             pack = pack[0..$-1];
         }
@@ -443,7 +443,7 @@ final class Quake2Watcher : Watcher
             } else {
                 return;
             }
-            
+
             if (!lines.empty) {
                 auto kvList = lines.front.splitter('\\').map!(s => cast(string)s);
                 if (!kvList.empty && kvList.front.empty) {
@@ -454,14 +454,14 @@ final class Quake2Watcher : Watcher
                 serverInfo.gamedir = "baseq2";
                 serverInfo.serverTypeC = ' ';
                 serverInfo.environmentC = ' ';
-                
+
                 while(!kvList.empty) {
                     auto key = kvList.front;
                     kvList.popFront();
                     if (!kvList.empty) {
                         auto value = kvList.front;
                         kvList.popFront();
-                        
+
                         switch(key)
                         {
                             case "maxclients":
@@ -482,7 +482,7 @@ final class Quake2Watcher : Watcher
                     }
                 }
                 lines.popFront();
-                
+
                 Player[] players;
                 ubyte i = 0;
                 foreach(line; lines) {
@@ -503,7 +503,7 @@ final class Quake2Watcher : Watcher
                         logError("%s: player parse error: %s. line : %s", line);
                     }
                 }
-                
+
                 serverInfo.playersCount = cast(ubyte)players.length;
                 callOnServerInfoReceived(serverInfo);
                 callOnPlayersReceived(players);
