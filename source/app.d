@@ -17,7 +17,10 @@ import vibe.http.router;
 import vibe.http.server;
 import vibe.http.fileserver;
 import vibe.data.json;
-import vibe.db.redis.redis;
+
+version(redis) {
+    import vibe.db.redis.redis;
+}
 
 import core.time;
 import std.algorithm;
@@ -50,6 +53,13 @@ struct Config
     uint recv_timeout;
 }
 
+struct ServerState
+{
+    ServerInfo serverInfo;
+    const(Player)[] players;
+    bool ok;
+}
+
 shared static this()
 {
     version(linux) {
@@ -79,37 +89,31 @@ shared static this()
         setLogFile(logFile);
     }
 
-    auto redis = new RedisClient(redisHost, redisPort);
-    redis.getDatabase(dbIndex).deleteAll();
-
     auto configString = readFile(configFileName).assumeUnique.assumeUTF;
     auto config = deserializeJson!Config(configString);
 
+    ServerState[string] serverStates;
+
     auto onServerInfoReceived = delegate(Watcher watcher, const ServerInfo serverInfo) {
         logTrace("%s: got server info %s", watcher.name, serverInfo);
-
-        auto redisDb = redis.getDatabase(dbIndex);
-        redisDb.set(format("%s:serverinfo", watcher.name), serverInfoToJson(serverInfo).toString());
+        serverStates[watcher.name].serverInfo = serverInfo;
     };
 
     auto onPlayersReceived = delegate(Watcher watcher, const Player[] players) {
         logTrace("%s: got players %s", watcher.name, players);
-
-        auto redisDb = redis.getDatabase(dbIndex);
-        redisDb.set(format("%s:players", watcher.name), playersToJson(players).toString());
+        serverStates[watcher.name].players = players;
     };
 
     auto onConnectionError = delegate(Watcher watcher, Exception e) {
         logError("%s: connection to server lost: %s", watcher.name, e.msg);
-        auto redisDb = redis.getDatabase(dbIndex);
-        redisDb.set(format("%s:ok", watcher.name), false);
+        serverStates[watcher.name].ok = false;
     };
 
     auto onConnectionRestored = delegate(Watcher watcher) {
         logInfo("%s: connection restored", watcher.name);
-        auto redisDb = redis.getDatabase(dbIndex);
-        redisDb.set(format("%s:ok", watcher.name), true);
+        serverStates[watcher.name].ok = true;
     };
+
 
     foreach(serverConfig; config.servers) {
         auto name = serverConfig.name;
@@ -142,11 +146,8 @@ shared static this()
         watcher.onConnectionRestored = onConnectionRestored;
         watcher.icon = serverConfig.icon;
 
-        auto redisDb = redis.getDatabase(dbIndex);
-        redisDb.set(format("%s:address", name), address);
-        redisDb.set(format("%s:port", name), format("%u", port));
-        redisDb.set(format("%s:icon", name), format("%s", watcher.icon));
-        redisDb.set(format("%s:ok", name), true);
+        serverStates[watcher.name] = ServerState();
+        serverStates[watcher.name].ok = true;
 
         watchers ~= watcher;
     }
@@ -174,27 +175,16 @@ shared static this()
 
     auto router = new URLRouter;
     router.get("/api/servers", delegate(HTTPServerRequest req, HTTPServerResponse res) {
-        auto redisDb = redis.getDatabase(dbIndex);
         Json toRespond = Json.emptyArray;
         foreach(const watcher; watchers) {
             try {
                 Json j = Json.emptyObject;
-                auto serverInfo = redisDb.get!string(format("%s:serverinfo", watcher.name));
-                auto players = redisDb.get!string(format("%s:players", watcher.name));
-
-                if (serverInfo !is null) {
-                    if (players !is null) {
-                        j["players"] = players.parseJsonString();
-                    } else {
-                        j["player"] = Json.emptyArray;
-                    }
-
-                    j["serverInfo"] = serverInfo.parseJsonString();
-                    j["host"] = redisDb.get!string(format("%s:address", watcher.name));
-                    j["port"] = redisDb.get!string(format("%s:port", watcher.name)).to!ushort;
-                    j["ok"] = redisDb.get!bool(format("%s:ok", watcher.name));
-                    toRespond ~= j;
-                }
+                j["serverInfo"] = serverInfoToJson(serverStates[watcher.name].serverInfo);
+                j["players"] = playersToJson(serverStates[watcher.name].players);
+                j["host"] = watcher.host;
+                j["port"] = watcher.port;
+                j["ok"] = serverStates[watcher.name].ok;
+                toRespond ~= j;
             } catch(Exception e) {
                 logError("%s", e);
             }
@@ -214,42 +204,39 @@ shared static this()
         ubyte playersCount;
         ubyte maxPlayersCount;
         bool isOk;
-        Player[] players;
+        const(Player)[] players;
     }
 
     router.get("/servers", delegate(HTTPServerRequest req, HTTPServerResponse res) {
         Server[] servers;
-        auto redisDb = redis.getDatabase(dbIndex);
 
         foreach(const watcher; watchers) {
             Server server;
-            server.address = redisDb.get!string(format("%s:address", watcher.name));
-            server.port = redisDb.get!string(format("%s:port", watcher.name)).to!ushort;
-            server.isOk = redisDb.get!bool(format("%s:ok", watcher.name));
-            auto serverInfoString = redisDb.get!string(format("%s:serverinfo", watcher.name));
-            auto playersString = redisDb.get!string(format("%s:players", watcher.name));
+
+            server.address = watcher.host;
+            server.port = watcher.port;
+            server.isOk = serverStates[watcher.name].ok;
+            server.players = serverStates[watcher.name].players;
+
+            ServerInfo serverInfo = serverStates[watcher.name].serverInfo;
+            server.serverName = serverInfo.serverName;
+            server.mapName = serverInfo.mapName;
+            server.playersCount = serverInfo.playersCount;
+            server.maxPlayersCount = serverInfo.maxPlayersCount;
+            server.gameName = serverInfo.game;
+            string gamedir = serverInfo.gamedir;
+            if (gamedir.length) {
+                string iconPath = format("public/icons/%s.png", watcher.icon);
+                if (existsFile(iconPath)) {
+                    server.iconPath = format("icons/%s.png", watcher.icon);
+                }
+            }
 
             if (watcher.supportsSteamUrl()) {
                 server.steamUrl = format("steam://connect/%s:%s", server.address, server.port);
             }
 
-            if (serverInfoString !is null && playersString !is null) {
-                auto serverInfoJson = serverInfoString.parseJsonString();
-                server.serverName = serverInfoJson["serverName"].to!string;
-                server.mapName = serverInfoJson["map"].to!string;
-                server.playersCount = serverInfoJson["playersCount"].to!ubyte;
-                server.maxPlayersCount = serverInfoJson["maxPlayersCount"].to!ubyte;
-                server.players = jsonToPlayers(playersString.parseJsonString());
-                server.gameName = serverInfoJson["game"].to!string;
-                string gamedir = serverInfoJson["gamedir"].to!string;
-                if (gamedir.length) {
-                    string iconPath = format("public/icons/%s.png", watcher.icon);
-                    if (existsFile(iconPath)) {
-                        server.iconPath = format("icons/%s.png", watcher.icon);
-                    }
-                }
-                servers ~= server;
-            }
+            servers ~= server;
         }
 
         string pageTitle = config.page_title.length ? config.page_title : "Game servers";

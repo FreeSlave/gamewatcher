@@ -15,7 +15,6 @@ Query information from various game servers. Watch their current state via web i
 * D compiler, e.g. dmd
 * dub
 * [vibe.d](https://github.com/rejectedsoftware/vibe.d) dependcies
-* redis-server
 
 ## How to run
 
@@ -26,8 +25,6 @@ dub run --build=release
 xdg-open http://127.0.0.1:27080/servers # open web interface in browser
 curl http://127.0.0.1:27080/api/servers | python -m json.tool # get JSON formatted info via REST api
 ```
-
-Note: redis-server should be running.
 
 ## Run in docker
 

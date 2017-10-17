@@ -1,6 +1,6 @@
 FROM debian:jessie
 RUN apt-get update -y
-RUN apt-get install -y libcrypto++-dev libevent-dev libssl-dev redis-server wget
+RUN apt-get install -y libcrypto++-dev libevent-dev libssl-dev wget
 RUN wget http://master.dl.sourceforge.net/project/d-apt/files/d-apt.list -O /etc/apt/sources.list.d/d-apt.list
 RUN apt-get update -y && apt-get -y --allow-unauthenticated install --reinstall d-apt-keyring
 RUN apt-get update -y
@@ -20,4 +20,4 @@ RUN useradd gamewatcher
 RUN mkdir -p /etc/vibe/
 RUN echo '{"user": "gamewatcher","group": "gamewatcher"}"' > /etc/vibe/vibe.conf
 EXPOSE 27080
-CMD service redis-server start && exec ./gamewatcher
+CMD ./gamewatcher
