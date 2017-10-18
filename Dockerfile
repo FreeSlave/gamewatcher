@@ -1,12 +1,10 @@
 FROM debian:jessie
-RUN apt-get update -y
-RUN apt-get install -y libcrypto++-dev libevent-dev libssl-dev wget
-RUN wget http://master.dl.sourceforge.net/project/d-apt/files/d-apt.list -O /etc/apt/sources.list.d/d-apt.list
-RUN apt-get update -y && apt-get -y --allow-unauthenticated install --reinstall d-apt-keyring
-RUN apt-get update -y
-RUN apt-get install -y --no-install-recommends dmd-bin dub
-RUN wget -qO- http://code.dlang.org/files/dub-1.2.1-linux-x86_64.tar.gz | tar zxf -
-RUN mv dub /usr/local/bin
+RUN apt-get update -y && \
+    apt-get install -y --no-install-recommends libcrypto++-dev libevent-dev libssl-dev wget libcurl3 gcc && \
+    wget http://downloads.dlang.org/releases/2.x/2.076.1/dmd_2.076.1-0_amd64.deb && dpkg -i dmd_2.076.1-0_amd64.deb && \
+    apt-get remove -y wget && \
+    apt-get -y clean && \
+    rm -rf /var/cache/apt/* /var/lib/apt/lists/*
 RUN mkdir -p /opt/gamewatcher
 WORKDIR /opt/gamewatcher
 COPY ./dub.json .
@@ -15,9 +13,6 @@ COPY ./config.json .
 COPY ./public ./public
 COPY ./source ./source
 COPY ./views ./views
-RUN dub build
-RUN useradd gamewatcher
-RUN mkdir -p /etc/vibe/
-RUN echo '{"user": "gamewatcher","group": "gamewatcher"}"' > /etc/vibe/vibe.conf
+RUN dub build && useradd gamewatcher && mkdir -p /etc/vibe/ && echo '{"user": "gamewatcher","group": "gamewatcher"}"' > /etc/vibe/vibe.conf
 EXPOSE 27080
-CMD ./gamewatcher
+ENTRYPOINT ["./gamewatcher"]
