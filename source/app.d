@@ -72,8 +72,6 @@ shared static this()
 
     string bindAddress = "0.0.0.0";
     ushort httpPort = 27080;
-    string redisHost = "127.0.0.1";
-    ushort redisPort = 6379u;
     string configFileName = "config.json";
     string logFile;
     long dbIndex = 0;
@@ -82,8 +80,6 @@ shared static this()
     readOption("port", &httpPort, "port to run server on");
     readOption("config", &configFileName, "path to configuration json file");
     readOption("logfile", &logFile, "path to log file");
-    readOption("redishost", &redisHost, "redis server ip address");
-    readOption("redisport", &redisPort, "redist server port");
 
     if (logFile.length) {
         setLogFile(logFile);
