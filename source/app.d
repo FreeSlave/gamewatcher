@@ -28,6 +28,7 @@ import std.array;
 import std.conv;
 import std.exception;
 import std.format;
+import std.path;
 import std.string;
 import std.typecons;
 
@@ -53,11 +54,39 @@ struct Config
     uint recv_timeout;
 }
 
-struct ServerState
+class Server
 {
-    ServerInfo serverInfo;
+    this(Watcher myWatcher) {
+        watcher = myWatcher;
+    }
+    Watcher watcher;
+    ServerInfo info;
     const(Player)[] players;
-    bool ok;
+    string icon;
+    string iconPath;
+
+    @property string address() const {
+        return watcher.host;
+    }
+    @property ushort port() {
+        return watcher.port;
+    }
+}
+
+Watcher createWatcher(string type, string name, string address, ushort port)
+{
+    switch(type) {
+        case "valve":
+            return new ValveWatcher(name, address, port);
+        case "xash":
+            return new XashWatcher(name, address, port);
+        case "quake":
+            return new QuakeWatcher(name, address, port);
+        case "quake2":
+            return new Quake2Watcher(name, address, port);
+        default:
+            return null;
+    }
 }
 
 shared static this()
@@ -68,7 +97,7 @@ shared static this()
             registerMemoryErrorHandler();
     }
 
-    Watcher[] watchers;
+    Server[] servers;
 
     string bindAddress = "0.0.0.0";
     ushort httpPort = 27080;
@@ -85,101 +114,141 @@ shared static this()
         setLogFile(logFile);
     }
 
-    auto configString = readFile(configFileName).assumeUnique.assumeUTF;
-    auto config = deserializeJson!Config(configString);
-
-    ServerState[string] serverStates;
+    Server* findServerByName(string name) {
+        auto foundServer = find!((a,b) => a.watcher.name == b)(servers, name);
+        if (!foundServer.empty) {
+            return &foundServer.front;
+        } else {
+            return null;
+        }
+    }
 
     auto onServerInfoReceived = delegate(Watcher watcher, const ServerInfo serverInfo) {
         logTrace("%s: got server info %s", watcher.name, serverInfo);
-        serverStates[watcher.name].serverInfo = serverInfo;
+        auto foundServer = findServerByName(watcher.name);
+        if (foundServer) {
+            foundServer.info = serverInfo;
+        } else {
+            logWarn("%s: could not find server when getting server info", watcher.name);
+        }
     };
 
     auto onPlayersReceived = delegate(Watcher watcher, const Player[] players) {
         logTrace("%s: got players %s", watcher.name, players);
-        serverStates[watcher.name].players = players;
+        auto foundServer = findServerByName(watcher.name);
+        if (foundServer) {
+            foundServer.players = players;
+        } else {
+            logWarn("%s: could not find server when getting players", watcher.name);
+        }
     };
 
     auto onConnectionError = delegate(Watcher watcher, Exception e) {
         logError("%s: connection to server lost: %s", watcher.name, e.msg);
-        serverStates[watcher.name].ok = false;
     };
 
     auto onConnectionRestored = delegate(Watcher watcher) {
         logInfo("%s: connection restored", watcher.name);
-        serverStates[watcher.name].ok = true;
     };
 
-
-    foreach(serverConfig; config.servers) {
-        auto name = serverConfig.name;
-        auto address = serverConfig.address;
-        auto port = serverConfig.port;
-
-        Watcher watcher;
-
-        switch(serverConfig.type) {
-            case "valve":
-                watcher = new ValveWatcher(name, address, port);
-                break;
-            case "xash":
-                watcher = new XashWatcher(name, address, port);
-                break;
-            case "quake":
-                watcher = new QuakeWatcher(name, address, port);
-                break;
-            case "quake2":
-                watcher = new Quake2Watcher(name, address, port);
-                break;
-            default:
-                logError("Unknown server type %s", serverConfig.type);
-                break;
-        }
-
-        watcher.onServerInfoReceived = onServerInfoReceived;
-        watcher.onPlayersReceived = onPlayersReceived;
-        watcher.onConnectionError = onConnectionError;
-        watcher.onConnectionRestored = onConnectionRestored;
-        watcher.icon = serverConfig.icon;
-
-        serverStates[watcher.name] = ServerState();
-        serverStates[watcher.name].ok = true;
-
-        watchers ~= watcher;
+    auto readConfig(string configFileName) {
+        auto configString = readFile(configFileName).assumeUnique.assumeUTF;
+        return deserializeJson!Config(configString);
     }
 
-    runTask(delegate (Watcher[] watchers) {
+    auto prepareServers(ref const Config config) {
+        Server[] servers;
+        foreach(serverConfig; config.servers) {
+            auto watcher = createWatcher(serverConfig.type, serverConfig.name, serverConfig.address, serverConfig.port);
+            if (!watcher) {
+                logError("Unknown server type %s", serverConfig.type);
+                continue;
+            }
+
+            watcher.onServerInfoReceived = onServerInfoReceived;
+            watcher.onPlayersReceived = onPlayersReceived;
+            watcher.onConnectionError = onConnectionError;
+            watcher.onConnectionRestored = onConnectionRestored;
+
+            auto server = new Server(watcher);
+            server.icon = serverConfig.icon;
+            servers ~= server;
+        }
+        return servers;
+    }
+
+    auto config = readConfig(configFileName);
+    servers = prepareServers(config);
+
+    auto startServerTasks(Server[] servers) {
+        foreach(server; servers) {
+            runTask(delegate(Watcher watcher) {
+                while(watcher !is null) {
+                    try {
+                        watcher.handleResponse(dur!"msecs"(config.recv_timeout));
+                    } catch(Exception e) {
+                        logError("%s: unknown error: %s", watcher.name, e);
+                    }
+                }
+            }, server.watcher);
+        }
+    }
+
+    runTask(delegate() {
+        auto baseConfigFileName = baseName(configFileName);
+        auto directoryWatcher = watchDirectory(dirName(configFileName), false);
+        DirectoryChange[] changes;
         while(true) {
-            foreach(watcher; watchers) {
-                watcher.requestInfo();
+            directoryWatcher.readChanges(changes, dur!"seconds"(-1));
+            foreach(change; changes) {
+                if ((change.type == DirectoryChangeType.modified || change.type == DirectoryChangeType.added) && change.path.head.name == baseConfigFileName) {
+                    logWarn("%s changed", configFileName);
+                    try {
+                        auto newConfig = readConfig(configFileName);
+                        auto newServers = prepareServers(newConfig);
+                        config = newConfig;
+                        foreach(newServer; newServers) {
+                            auto server = findServerByName(newServer.watcher.name);
+                            if (server) {
+                                newServer.info = server.info;
+                                newServer.players = server.players;
+                            }
+                        }
+                        foreach(server; servers) {
+                            server.watcher = null;
+                        }
+                        servers = newServers;
+                        startServerTasks(servers);
+                    } catch(Exception e) {
+                        logError("Could not parse config changes: %s", e.msg);
+                    }
+                }
+            }
+        }
+    });
+
+    runTask(delegate () {
+        while(true) {
+            foreach(server; servers) {
+                server.watcher.requestInfo();
             }
             sleep(dur!"msecs"(config.refresh_time));
         }
-    }, watchers);
+    });
 
-    foreach(w; watchers) {
-        runTask(delegate(Watcher watcher) {
-            while(true) {
-                try {
-                    watcher.handleResponse(dur!"msecs"(config.recv_timeout));
-                } catch(Exception e) {
-                    logError("%s: unknown error: %s", watcher.name, e);
-                }
-            }
-        }, w);
-    }
+    startServerTasks(servers);
 
     auto router = new URLRouter;
     router.get("/api/servers", delegate(HTTPServerRequest req, HTTPServerResponse res) {
         Json toRespond = Json.emptyArray;
-        foreach(const watcher; watchers) {
+        foreach(const server; servers) {
             try {
                 Json j = Json.emptyObject;
-                j["serverInfo"] = serverInfoToJson(serverStates[watcher.name].serverInfo);
-                j["players"] = playersToJson(serverStates[watcher.name].players);
-                j["host"] = watcher.host;
-                j["port"] = watcher.port;
-                j["ok"] = serverStates[watcher.name].ok;
+                j["serverInfo"] = serverInfoToJson(server.info);
+                j["players"] = playersToJson(server.players);
+                j["host"] = server.watcher.host;
+                j["port"] = server.watcher.port;
+                j["ok"] = server.watcher.isOk;
                 toRespond ~= j;
             } catch(Exception e) {
                 logError("%s", e);
@@ -188,51 +257,15 @@ shared static this()
         res.writeJsonBody(toRespond);
     });
 
-    static struct Server
-    {
-        string address;
-        ushort port;
-        string serverName;
-        string mapName;
-        string gameName;
-        string iconPath;
-        string steamUrl;
-        ubyte playersCount;
-        ubyte maxPlayersCount;
-        bool isOk;
-        const(Player)[] players;
-    }
-
     router.get("/servers", delegate(HTTPServerRequest req, HTTPServerResponse res) {
-        Server[] servers;
-
-        foreach(const watcher; watchers) {
-            Server server;
-
-            server.address = watcher.host;
-            server.port = watcher.port;
-            server.isOk = serverStates[watcher.name].ok;
-            server.players = serverStates[watcher.name].players;
-
-            ServerInfo serverInfo = serverStates[watcher.name].serverInfo;
-            server.serverName = serverInfo.serverName;
-            server.mapName = serverInfo.mapName;
-            server.playersCount = serverInfo.playersCount;
-            server.maxPlayersCount = serverInfo.maxPlayersCount;
-            server.gameName = serverInfo.game;
-            string gamedir = serverInfo.gamedir;
-            if (gamedir.length) {
-                string iconPath = format("public/icons/%s.png", watcher.icon);
-                if (existsFile(iconPath)) {
-                    server.iconPath = format("icons/%s.png", watcher.icon);
-                }
+        foreach(ref server; servers) {
+            if (!server.icon.length || server.iconPath.length) {
+                continue;
             }
-
-            if (watcher.supportsSteamUrl()) {
-                server.steamUrl = format("steam://connect/%s:%s", server.address, server.port);
+            string iconPath = format("public/icons/%s.png", server.icon);
+            if (existsFile(iconPath)) {
+                server.iconPath = format("icons/%s.png", server.icon);
             }
-
-            servers ~= server;
         }
 
         string pageTitle = config.page_title.length ? config.page_title : "Game servers";

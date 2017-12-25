@@ -12,21 +12,21 @@ html
                 div.server
                     div.serverMainInfo
                         span
-                            img.gameIcon(title='#{server.gameName}', src='#{server.iconPath}')
-                            div.serverTitle #{server.serverName}
-                                - if (server.isOk)
+                            img.gameIcon(title='#{server.info.game}', src='#{server.iconPath}')
+                            div.serverTitle #{server.info.serverName}
+                                - if (server.watcher.isOk)
                                     img(title='All is OK', src='images/dialog-ok-apply.png')
                                 - else
                                     img(title='Broken', src='images/dialog-error.png')
                     div.serverAddress
-                        - if (server.steamUrl.length)
+                        - if (server.watcher.connectUrl.length)
                             | connect
-                            a(href='#{server.steamUrl}') #{server.address}:#{server.port}
+                            a(href='#{server.watcher.connectUrl}') #{server.address}:#{server.port}
                         - else
                             | connect #{server.address}:#{server.port}
                     div.serverAdditionalInfo
-                        div.mapName Current map: #{server.mapName}
-                        div.playerCount Players: #{server.playersCount}/#{server.maxPlayersCount}
+                        div.mapName Current map: #{server.info.mapName}
+                        div.playerCount Players: #{server.info.playersCount}/#{server.info.maxPlayersCount}
                     - if (server.players.length)
                         div.playerTable
                             div.headerRow
@@ -39,7 +39,7 @@ html
                     - else
                         p Server is empty :(
 
-        h2 Enable opening steam:// urls on Linux
+        h2 If steam:// urls don't work for you on Linux:
         p Add to the end of ~/.local/share/applications/mimeapps.list file
         blockquote x-scheme-handler/steam=steam.desktop
 

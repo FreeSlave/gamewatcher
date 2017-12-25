@@ -30,7 +30,7 @@ class Watcher
         this.name = name;
         this.host = host;
         this.port = port;
-        isOk = true;
+        _isOk = true;
         socket = listenUDP(0);
         socket.connect(host, port);
     }
@@ -55,8 +55,12 @@ class Watcher
     protected abstract void handleResponseImpl(const(ubyte)[] pack);
     protected abstract void requestInfoImpl();
 
-    bool supportsSteamUrl() const {
-        return false;
+    string connectUrl() const {
+        return null;
+    }
+
+    @property final bool isOk() const {
+        return _isOk;
     }
 
     void delegate(Watcher watcher, const ServerInfo serverInfo) onServerInfoReceived;
@@ -70,7 +74,7 @@ class Watcher
     ushort port;
 
 protected:
-    bool isOk;
+    bool _isOk;
 
     final void send(const(ubyte)[] toSend) {
         socket.send(toSend);
@@ -79,16 +83,16 @@ protected:
         return socket.recv(timeout);
     }
     final void setNotOk(Exception e) {
-        if (isOk) {
-            isOk = false;
+        if (_isOk) {
+            _isOk = false;
             if (onConnectionError) {
                 onConnectionError(this, e);
             }
         }
     }
     final void setOk() {
-        if (!isOk) {
-            isOk = true;
+        if (!_isOk) {
+            _isOk = true;
             if (onConnectionRestored) {
                 onConnectionRestored(this);
             }
@@ -152,8 +156,8 @@ final class ValveWatcher : Watcher
         }
     }
 
-    override bool supportsSteamUrl() const {
-        return true;
+    override string connectUrl() const {
+        return format("steam://connect/%s:%s", host, port);
     }
 
 private:
