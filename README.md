@@ -14,7 +14,7 @@ Query information from various game servers. Watch their current state via web i
 
 * D compiler, e.g. dmd
 * dub
-* [vibe.d](https://github.com/rejectedsoftware/vibe.d) dependcies
+* [vibe.d](https://github.com/rejectedsoftware/vibe.d) dependencies
 
 ## How to run
 
@@ -37,18 +37,5 @@ No need to install D compiler and dub on the host.
 cp config_example/config.json . # copy example config
 nano config.json # edit config
 docker build -t gamewatcher .
-docker run -p 27080:27080 gamewatcher
-```
-
-### Build on host and run in docker container:
-
-You build the project on the host environment and it's copied to the container.
-Faster than the former method, but requires D tools on the host and produced binary file to be compatible with container environment.
-
-```
-cp config_example/config.json . # copy example config
-nano config.json # edit config
-dub build
-docker build -t gamewatcher-local -f Dockerfile-local .
-docker run -p 27080:27080 gamewatcher-local
+docker run -v "$(pwd)/config.json":/opt/gamewatcher/config.json -v "$(pwd)/public":/opt/gamewatcher/public -p 27080:27080 gamewatcher
 ```
