@@ -182,15 +182,15 @@ shared static this()
 
     auto startServerTasks(Server[] servers) {
         foreach(server; servers) {
-            runTask(delegate(Watcher watcher) {
-                while(watcher !is null) {
+            runTask(delegate(Server server) {
+                while(server.watcher !is null) {
                     try {
-                        watcher.handleResponse(dur!"msecs"(config.recv_timeout));
+                        server.watcher.handleResponse(dur!"msecs"(config.recv_timeout));
                     } catch(Exception e) {
-                        logError("%s: unknown error: %s", watcher.name, e);
+                        logError("%s: unknown error: %s", server.watcher.name, e);
                     }
                 }
-            }, server.watcher);
+            }, server);
         }
     }
 
