@@ -52,7 +52,7 @@ class Watcher
             setNotOk(e);
         }
     }
-    protected abstract void handleResponseImpl(const(ubyte)[] pack);
+    protected abstract void handleResponseImpl(immutable(ubyte)[] pack);
     protected abstract void requestInfoImpl();
 
     string connectUrl() const {
@@ -79,8 +79,8 @@ protected:
     final void send(const(ubyte)[] toSend) {
         socket.send(toSend);
     }
-    final const(ubyte)[] receive(Duration timeout) {
-        return socket.recv(timeout);
+    final immutable(ubyte)[] receive(Duration timeout) {
+        return socket.recv(timeout).assumeUnique;
     }
     final void setNotOk(Exception e) {
         if (_isOk) {
@@ -128,7 +128,7 @@ final class ValveWatcher : Watcher
         send(infoRequest);
     }
 
-    protected override void handleResponseImpl(const(ubyte)[] pack)
+    protected override void handleResponseImpl(immutable(ubyte)[] pack)
     {
         auto header = read!(int, Endian.littleEndian)(pack);
         if (header == -1) {
@@ -159,6 +159,34 @@ final class ValveWatcher : Watcher
     override string connectUrl() const {
         return format("steam://connect/%s:%s", host, port);
     }
+protected:
+    @safe static ServerInfo.Type serverTypeFromLetter(char c) nothrow pure
+    {
+        switch (c) {
+            case 'd':
+                return ServerInfo.Type.Dedicated;
+            case 'l':
+                return ServerInfo.Type.NonDedicated;
+            case 'p':
+                return ServerInfo.Type.SourceTV;
+            default:
+                return ServerInfo.Type.Unknown;
+        }
+    }
+    @safe static ServerInfo.OS osFromLetter(char c) nothrow pure
+    {
+        switch(c) {
+            case 'l':
+                return ServerInfo.OS.Linux;
+            case 'w':
+                return ServerInfo.OS.Windows;
+            case 'm':
+            case 'o':
+                return ServerInfo.OS.OSX;
+            default:
+                return ServerInfo.OS.Unknown;
+        }
+    }
 
 private:
     final ServerInfo parseServerInfo(const(ubyte)[] data)
@@ -174,10 +202,11 @@ private:
         info.playersCount = readByte(data);
         info.maxPlayersCount = readByte(data);
         info.botsCount = readByte(data);
-        info.serverTypeC = readByte(data);
-        info.environmentC = readByte(data);
-        info.visibility = readByte(data);
-        info.VAC = readByte(data);
+        info.serverType = serverTypeFromLetter(readByte(data));
+        info.environment = osFromLetter(readByte(data));
+
+        info.requiresPassword = readByte(data) != 0;
+        info.isSecured = readByte(data) != 0;
         return info;
     }
 
@@ -213,7 +242,7 @@ final class XashWatcher : Watcher
         send(infoRequest);
     }
 
-    override void handleResponseImpl(const(ubyte)[] pack)
+    override void handleResponseImpl(immutable(ubyte)[] pack)
     {
         if (pack.length && pack[$-1] == '\0') {
             pack = pack[0..$-1];
@@ -281,8 +310,6 @@ private:
             }
         }
         serverInfo.game = "Half-Life";
-        serverInfo.serverTypeC = ' ';
-        serverInfo.environmentC = ' ';
         return serverInfo;
     }
     final Player[] parsePlayers(string packStr)
@@ -340,7 +367,7 @@ final class QuakeWatcher : Watcher
         send(infoRequest);
     }
 
-    protected override void handleResponseImpl(const(ubyte)[] pack)
+    protected override void handleResponseImpl(immutable(ubyte)[] pack)
     {
         if (pack.length && pack[$-1] == '\0') {
             pack = pack[0..$-1];
@@ -358,8 +385,6 @@ final class QuakeWatcher : Watcher
                     ServerInfo serverInfo;
                     serverInfo.game = "Quake";
                     serverInfo.gamedir = "baseq";
-                    serverInfo.serverTypeC = ' ';
-                    serverInfo.environmentC = ' ';
 
                     while(!kvList.empty) {
                         auto key = kvList.front;
@@ -434,7 +459,7 @@ final class Quake2Watcher : Watcher
         send(infoRequest);
     }
 
-    protected override void handleResponseImpl(const(ubyte)[] pack)
+    protected override void handleResponseImpl(immutable(ubyte)[] pack)
     {
         if (pack.length && pack[$-1] == '\0') {
             pack = pack[0..$-1];
@@ -456,8 +481,6 @@ final class Quake2Watcher : Watcher
                 ServerInfo serverInfo;
                 serverInfo.game = "Quake II";
                 serverInfo.gamedir = "baseq2";
-                serverInfo.serverTypeC = ' ';
-                serverInfo.environmentC = ' ';
 
                 while(!kvList.empty) {
                     auto key = kvList.front;

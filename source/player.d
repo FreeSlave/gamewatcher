@@ -14,10 +14,10 @@ import std.bitmanip;
 struct Player
 {
     ubyte index;
-    @property string name() const {
+    @safe @property string name() const nothrow pure {
         return _name;
     }
-    @property string name(string n) {
+    @trusted @property string name(string n) nothrow {
         import std.utf;
         import std.typecons;
         try {

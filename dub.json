@@ -7,7 +7,7 @@
 	"copyright": "Copyright © 2016, Roman Chistokhodov",
 	"description": "Querying information from game servers.",
 	"dependencies": {
-		"vibe-d": "~>0.8.1"
+		"vibe-d:http": "~>0.9.0"
 	},
 	"versions": [
 		"VibeDefaultMain"

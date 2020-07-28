@@ -37,42 +37,8 @@ struct ServerInfo
     ubyte playersCount;
     ubyte maxPlayersCount;
     ubyte botsCount;
-    char serverTypeC;
-    char environmentC;
-    ubyte visibility;
-    ubyte VAC;
-
-    bool requiresPassword() const {
-        return visibility != 0;
-    }
-    bool isSecured() const {
-        return VAC != 0;
-    }
-
-    Type serverType() const {
-        switch (serverTypeC) {
-            case 'd':
-                return Type.Dedicated;
-            case 'l':
-                return Type.NonDedicated;
-            case 'p':
-                return Type.SourceTV;
-            default:
-                return Type.Unknown;
-        }
-    }
-
-    OS environment() const {
-        switch(environmentC) {
-            case 'l':
-                return OS.Linux;
-            case 'w':
-                return OS.Windows;
-            case 'm':
-            case 'o':
-                return OS.OSX;
-            default:
-                return OS.Unknown;
-        }
-    }
+    Type serverType;
+    OS environment;
+    bool requiresPassword;
+    bool isSecured;
 }

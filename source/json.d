@@ -19,8 +19,8 @@ Json serverInfoToJson(const ServerInfo info)
     j["game"] = info.game;
     j["gamedir"] = info.gamedir;
     j["map"] = info.mapName;
-    j["requiresPassword"] = info.requiresPassword();
-    j["isSecured"] = info.isSecured();
+    j["requiresPassword"] = info.requiresPassword;
+    j["isSecured"] = info.isSecured;
     string type;
     final switch(info.serverType) {
         case ServerInfo.Type.Dedicated:
@@ -38,7 +38,7 @@ Json serverInfoToJson(const ServerInfo info)
     }
     j["serverType"] = type;
     string os;
-    final switch(info.environment()) {
+    final switch(info.environment) {
         case ServerInfo.OS.Linux:
             os = "linux";
             break;

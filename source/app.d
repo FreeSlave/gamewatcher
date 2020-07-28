@@ -18,10 +18,6 @@ import vibe.http.server;
 import vibe.http.fileserver;
 import vibe.data.json;
 
-version(redis) {
-    import vibe.db.redis.redis;
-}
-
 import core.time;
 import std.algorithm;
 import std.array;
