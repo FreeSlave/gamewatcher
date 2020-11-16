@@ -26,7 +26,8 @@ import utils;
 
 class Watcher
 {
-    this(string name, string host, ushort port) {
+    this(string name, string host, ushort port)
+    {
         this.name = name;
         this.host = host;
         this.port = port;

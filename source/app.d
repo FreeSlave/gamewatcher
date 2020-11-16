@@ -52,7 +52,9 @@ struct Config
 
 class Server
 {
-    this(Watcher myWatcher) {
+    this(Watcher myWatcher)
+    in(myWatcher !is null)
+    {
         watcher = myWatcher;
     }
     Watcher watcher;
@@ -85,7 +87,7 @@ Watcher createWatcher(string type, string name, string address, ushort port)
     }
 }
 
-shared static this()
+void main(string[] args)
 {
     version(linux) {
         import etc.linux.memoryerror;
@@ -275,4 +277,5 @@ shared static this()
     settings.port = httpPort;
 
     listenHTTP(settings, router);
+    runApplication();
 }
