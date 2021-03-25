@@ -24,6 +24,11 @@ import player;
 import serverinfo;
 import utils;
 
+class RequestTimeoutException : Exception
+{
+    mixin basicExceptionCtors;
+}
+
 class Watcher
 {
     this(string name, string host, ushort port)
@@ -44,13 +49,21 @@ class Watcher
         }
     }
 
-    final void handleResponse(Duration timeout) {
+    final void handleResponse(Duration timeout, Duration maxTimeout) {
         try {
             auto data = receive(timeout);
             handleResponseImpl(data);
             setOk();
+            overallTimeout = Duration.zero;
         } catch(Exception e) {
-            setNotOk(e);
+            if (e.message.startsWith("Receieve timeout")) {
+                overallTimeout += timeout;
+                if (overallTimeout >= maxTimeout) {
+                    setNotOk(e);
+                }
+            } else {
+                setNotOk(e);
+            }
         }
     }
     protected abstract void handleResponseImpl(immutable(ubyte)[] pack);
@@ -73,6 +86,8 @@ class Watcher
     string icon;
     string host;
     ushort port;
+
+    Duration overallTimeout;
 
 protected:
     bool _isOk;

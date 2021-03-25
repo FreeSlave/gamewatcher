@@ -13,6 +13,7 @@ import vibe.core.core;
 import vibe.core.file;
 import vibe.core.log;
 import vibe.core.net;
+import vibe.core.sync;
 import vibe.http.router;
 import vibe.http.server;
 import vibe.http.fileserver;
@@ -45,9 +46,9 @@ struct ServerConfig
 struct Config
 {
     ServerConfig[] servers;
-    string page_title;
-    uint refresh_time;
-    uint recv_timeout;
+    @optional @name("page_title") string pageTitle;
+    @name("refresh_time") uint refreshTime;
+    @name("recv_timeout") uint recvTimeout;
 }
 
 class Server
@@ -142,11 +143,11 @@ void main(string[] args)
     };
 
     auto onConnectionError = delegate(Watcher watcher, Exception e) {
-        logError("%s: connection to server lost: %s", watcher.name, e.msg);
+        logError("%s (%s:%s): could not connect: %s", watcher.name, watcher.host, watcher.port, e.msg);
     };
 
     auto onConnectionRestored = delegate(Watcher watcher) {
-        logInfo("%s: connection restored", watcher.name);
+        logInfo("%s (%s:%s): connection restored", watcher.name, watcher.host, watcher.port);
     };
 
     auto readConfig(string configFileName) {
@@ -178,29 +179,17 @@ void main(string[] args)
     auto config = readConfig(configFileName);
     servers = prepareServers(config);
 
-    auto startServerTasks(Server[] servers) {
-        foreach(server; servers) {
-            runTask(delegate(Server server) {
-                while(server.watcher !is null) {
-                    try {
-                        server.watcher.handleResponse(dur!"msecs"(config.recv_timeout));
-                    } catch(Exception e) {
-                        logError("%s: unknown error: %s", server.watcher.name, e);
-                    }
-                }
-            }, server);
-        }
-    }
+    auto baseConfigFileName = baseName(configFileName);
+    auto directoryWatcher = watchDirectory(dirName(configFileName), false);
 
-    runTask(delegate() {
-        auto baseConfigFileName = baseName(configFileName);
-        auto directoryWatcher = watchDirectory(dirName(configFileName), false);
+    auto dirWatcherTimer = setTimer(dur!"seconds"(1), delegate() {
         DirectoryChange[] changes;
-        while(true) {
-            directoryWatcher.readChanges(changes, dur!"seconds"(-1));
+
+        if (directoryWatcher.readChanges(changes, dur!"seconds"(-1)))
+        {
             foreach(change; changes) {
                 if ((change.type == DirectoryChangeType.modified || change.type == DirectoryChangeType.added) && change.path.head.name == baseConfigFileName) {
-                    logWarn("%s changed", configFileName);
+                    logInfo("%s changed", configFileName);
                     try {
                         auto newConfig = readConfig(configFileName);
                         auto newServers = prepareServers(newConfig);
@@ -216,25 +205,54 @@ void main(string[] args)
                             server.watcher = null;
                         }
                         servers = newServers;
-                        startServerTasks(servers);
+                        logInfo("Successfully reloaded config and updated server list");
                     } catch(Exception e) {
                         logError("Could not parse config changes: %s", e.msg);
                     }
                 }
             }
         }
-    });
+    }, true);
+    scope(exit) dirWatcherTimer.stop();
 
-    runTask(delegate () {
-        while(true) {
-            foreach(server; servers) {
-                server.watcher.requestInfo();
+    auto mutex = new TaskMutex;
+    auto condition = new TaskCondition(mutex);
+
+    auto periodicRequester = setTimer(dur!"msecs"(config.refreshTime), delegate() {
+        foreach(server; servers) {
+            server.watcher.requestInfo();
+        }
+        condition.notifyAll();
+    }, true);
+    scope(exit) periodicRequester.stop();
+
+    Task watcherTask = runTask(delegate() {
+        const Duration smallRecvTimeout = dur!"msecs"(100);
+
+        while(servers.length)
+        {
+            synchronized(mutex) condition.wait();
+
+            auto serversShallowCopy = servers;
+            foreach(server; serversShallowCopy)
+            {
+                if (server.watcher is null)
+                    continue;
+                if (servers.length == 0)
+                    break;
+                try {
+                    server.watcher.handleResponse(smallRecvTimeout, dur!"msecs"(config.recvTimeout));
+                } catch(Exception e) {
+                    logError("%s: unknown error: %s", server.watcher.name, e);
+                }
             }
-            sleep(dur!"msecs"(config.refresh_time));
         }
     });
 
-    startServerTasks(servers);
+    scope(exit) {
+        servers = [];
+        watcherTask.join();
+    }
 
     auto router = new URLRouter;
     router.get("/api/servers", delegate(HTTPServerRequest req, HTTPServerResponse res) {
@@ -266,7 +284,7 @@ void main(string[] args)
             }
         }
 
-        string pageTitle = config.page_title.length ? config.page_title : "Game servers";
+        string pageTitle = config.pageTitle.length ? config.pageTitle : "Game servers";
         res.render!("servers.dt", servers, pageTitle);
     });
 
@@ -276,6 +294,14 @@ void main(string[] args)
     settings.bindAddresses = [bindAddress];
     settings.port = httpPort;
 
-    listenHTTP(settings, router);
+    auto listenServer = listenHTTP(settings, router);
+    scope(exit) listenServer.stopListening();
+
+    scope(exit) {
+        foreach(server; servers) {
+            server.watcher = null;
+        }
+    }
+
     runApplication();
 }
