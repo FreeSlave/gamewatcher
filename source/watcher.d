@@ -19,6 +19,7 @@ import std.exception;
 import std.range;
 import std.string;
 import std.utf;
+import std.typecons;
 
 import player;
 import serverinfo;
@@ -36,9 +37,12 @@ class Watcher
         this.name = name;
         this.host = host;
         this.port = port;
-        _isOk = true;
         socket = listenUDP(0);
         socket.connect(host, port);
+    }
+
+    void dispose() {
+        socket.close();
     }
 
     final void requestInfo() {
@@ -56,7 +60,7 @@ class Watcher
             setOk();
             overallTimeout = Duration.zero;
         } catch(Exception e) {
-            if (e.message.startsWith("Receieve timeout")) {
+            if (e.message.startsWith("Receive timeout")) {
                 overallTimeout += timeout;
                 if (overallTimeout >= maxTimeout) {
                     setNotOk(e);
@@ -74,13 +78,14 @@ class Watcher
     }
 
     @property final bool isOk() const {
-        return _isOk;
+        return _isOk == Ternary.yes;
     }
 
-    void delegate(Watcher watcher, const ServerInfo serverInfo) onServerInfoReceived;
-    void delegate(Watcher watcher, const Player[] players) onPlayersReceived;
-    void delegate(Watcher wathcer, Exception e) onConnectionError;
-    void delegate(Watcher wathcer) onConnectionRestored;
+    void delegate(scope Watcher watcher, const ServerInfo serverInfo) onServerInfoReceived;
+    void delegate(scope Watcher watcher, const Player[] players) onPlayersReceived;
+    void delegate(scope Watcher watcher, Exception e) onConnectionError;
+    void delegate(scope Watcher watcher) onConnectionRestored;
+    void delegate(scope Watcher watcher) onConnectionMade;
 
     string name;
     string icon;
@@ -90,7 +95,7 @@ class Watcher
     Duration overallTimeout;
 
 protected:
-    bool _isOk;
+    Ternary _isOk;
 
     final void send(const(ubyte)[] toSend) {
         socket.send(toSend);
@@ -99,18 +104,23 @@ protected:
         return socket.recv(timeout).assumeUnique;
     }
     final void setNotOk(Exception e) {
-        if (_isOk) {
-            _isOk = false;
+        if (_isOk == Ternary.yes) {
+            _isOk = Ternary.no;
             if (onConnectionError) {
                 onConnectionError(this, e);
             }
         }
     }
     final void setOk() {
-        if (!_isOk) {
-            _isOk = true;
+        if (_isOk == Ternary.no) {
+            _isOk = Ternary.yes;
             if (onConnectionRestored) {
                 onConnectionRestored(this);
+            }
+        } else if (_isOk == Ternary.unknown) {
+            _isOk = Ternary.yes;
+            if (onConnectionMade) {
+                onConnectionMade(this);
             }
         }
     }

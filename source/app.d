@@ -122,7 +122,7 @@ void main(string[] args)
         }
     }
 
-    auto onServerInfoReceived = delegate(Watcher watcher, const ServerInfo serverInfo) {
+    auto onServerInfoReceived = delegate(scope Watcher watcher, const ServerInfo serverInfo) {
         logTrace("%s: got server info %s", watcher.name, serverInfo);
         auto foundServer = findServerByName(watcher.name);
         if (foundServer) {
@@ -132,7 +132,7 @@ void main(string[] args)
         }
     };
 
-    auto onPlayersReceived = delegate(Watcher watcher, const Player[] players) {
+    auto onPlayersReceived = delegate(scope Watcher watcher, const Player[] players) {
         logTrace("%s: got players %s", watcher.name, players);
         auto foundServer = findServerByName(watcher.name);
         if (foundServer) {
@@ -142,12 +142,16 @@ void main(string[] args)
         }
     };
 
-    auto onConnectionError = delegate(Watcher watcher, Exception e) {
+    auto onConnectionError = delegate(scope Watcher watcher, Exception e) {
         logError("%s (%s:%s): could not connect: %s", watcher.name, watcher.host, watcher.port, e.msg);
     };
 
-    auto onConnectionRestored = delegate(Watcher watcher) {
+    auto onConnectionRestored = delegate(scope Watcher watcher) {
         logInfo("%s (%s:%s): connection restored", watcher.name, watcher.host, watcher.port);
+    };
+
+    auto onConnectionMade = delegate(scope Watcher watcher) {
+        logInfo("%s (%s:%s): connection made", watcher.name, watcher.host, watcher.port);
     };
 
     auto readConfig(string configFileName) {
@@ -168,6 +172,7 @@ void main(string[] args)
             watcher.onPlayersReceived = onPlayersReceived;
             watcher.onConnectionError = onConnectionError;
             watcher.onConnectionRestored = onConnectionRestored;
+            watcher.onConnectionMade = onConnectionMade;
 
             auto server = new Server(watcher);
             server.icon = serverConfig.icon;
@@ -202,6 +207,7 @@ void main(string[] args)
                             }
                         }
                         foreach(server; servers) {
+                            server.watcher.dispose();
                             server.watcher = null;
                         }
                         servers = newServers;
@@ -236,10 +242,10 @@ void main(string[] args)
             auto serversShallowCopy = servers;
             foreach(server; serversShallowCopy)
             {
-                if (server.watcher is null)
-                    continue;
                 if (servers.length == 0)
                     break;
+                if (server.watcher is null)
+                    continue;
                 try {
                     server.watcher.handleResponse(smallRecvTimeout, dur!"msecs"(config.recvTimeout));
                 } catch(Exception e) {
@@ -248,11 +254,6 @@ void main(string[] args)
             }
         }
     });
-
-    scope(exit) {
-        servers = [];
-        watcherTask.join();
-    }
 
     auto router = new URLRouter;
     router.get("/api/servers", delegate(HTTPServerRequest req, HTTPServerResponse res) {
@@ -299,8 +300,12 @@ void main(string[] args)
 
     scope(exit) {
         foreach(server; servers) {
+            server.watcher.dispose();
             server.watcher = null;
         }
+        servers = [];
+        condition.notifyAll();
+        watcherTask.join();
     }
 
     runApplication();
