@@ -1,7 +1,7 @@
 # Gamewatcher
 Query information from various game servers. Watch their current state via web interface or REST api.
 
-[![Build Status](https://travis-ci.org/FreeSlave/gamewatcher.svg?branch=master)](https://travis-ci.org/FreeSlave/gamewatcher)
+[![Build Status](https://github.com/FreeSlave/gamewatcher/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/FreeSlave/gamewatcher/actions/workflows/ci.yml)
 
 ## Supported game servers
 
